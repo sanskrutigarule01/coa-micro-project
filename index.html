@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CPU Instruction Cycle Simulator</title>
+<style>
+*{box-sizing:border-box}
+body{margin:0;font-family:Arial,sans-serif;background:#0b1120;color:#e5edff;padding:20px}
+main{max-width:950px;margin:auto}
+header{text-align:center;padding:25px}
+header h1{color:#67e8f9;margin-bottom:8px}
+header p,.muted{color:#a9b8d4}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:14px}
+.card{background:#151f33;border:1px solid #293954;border-radius:15px;padding:20px;margin-bottom:16px}
+h2{font-size:19px;color:#93c5fd}
+label{display:block;margin:12px 0 6px}
+input,select{width:100%;padding:12px;border-radius:8px;border:1px solid #40516d;background:#0b1120;color:white}
+button{padding:12px 16px;border:0;border-radius:8px;background:#0891b2;color:white;font-weight:bold;cursor:pointer;margin:8px 5px 0 0}
+button:hover{background:#0e7490}
+.secondary{background:#475569}
+.stages{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
+.stage{text-align:center;padding:17px 5px;border-radius:10px;background:#26344b;border:1px solid #40516d}
+.stage.active{background:#166534;border-color:#4ade80;color:#fff}
+.number{font-size:12px;color:#67e8f9}
+.value{font-size:23px;font-weight:bold;margin-top:8px;overflow-wrap:anywhere}
+#status{line-height:1.6;color:#bae6fd}
+#result{color:#86efac;font-size:25px;font-weight:bold}
+footer{text-align:center;color:#94a3b8;padding:15px}
+@media(max-width:450px){body{padding:10px}.card{padding:14px}.stage{font-size:13px}}
+</style>
+</head>
+<body>
+<main>
+<header>
+<h1>CPU Instruction Cycle</h1>
+<p>Interactive Fetch • Decode • Execute Simulator</p>
+</header>
+
+<section class="grid">
+<div class="card">
+<h2>Control Panel</h2>
+<label for="operation">Select Instruction</label>
+<select id="operation">
+<option value="ADD">ADD A, B</option>
+<option value="SUB">SUB A, B</option>
+<option value="MUL">MUL A, B</option>
+</select>
+<label for="a">Register A</label>
+<input id="a" type="number" value="10">
+<label for="b">Register B</label>
+<input id="b" type="number" value="5">
+<button onclick="resetCycle()">Start / Reset</button>
+<button onclick="nextStep()">Next Step →</button>
+</div>
+
+<div class="card">
+<h2>CPU Registers</h2>
+<div class="grid">
+<div><div class="number">PROGRAM COUNTER</div><div class="value" id="pc">100</div></div>
+<div><div class="number">INSTRUCTION REGISTER</div><div class="value" id="ir">Empty</div></div>
+<div><div class="number">REGISTER A</div><div class="value" id="regA">10</div></div>
+<div><div class="number">REGISTER B</div><div class="value" id="regB">5</div></div>
+</div>
+<p class="muted">PC = next instruction address (simplified model)</p>
+</div>
+</section>
+
+<section class="card">
+<h2>Instruction Cycle Progress</h2>
+<div class="stages">
+<div class="stage" id="fetch"><div class="number">STAGE 01</div><h3>FETCH</h3></div>
+<div class="stage" id="decode"><div class="number">STAGE 02</div><h3>DECODE</h3></div>
+<div class="stage" id="execute"><div class="number">STAGE 03</div><h3>EXECUTE</h3></div>
+</div>
+<h3 id="stageTitle">Ready to start</h3>
+<p id="status">Click Next Step to begin the simulation.</p>
+</section>
+
+<section class="grid">
+<div class="card">
+<h2>ALU Output</h2>
+<p class="muted">Arithmetic Logic Unit</p>
+<div id="result">Waiting...</div>
+</div>
+<div class="card">
+<h2>Instruction Details</h2>
+<p id="details">Choose an instruction and start.</p>
+<p id="clock" class="muted">Completed stages: 0 / 3</p>
+</div>
+</section>
+
+<footer>COA Micro Project | CPU Instruction Cycle Simulator</footer>
+</main>
+
+<script>
+let step = 0;
+let finished = false;
+
+function resetCycle(){
+  step = 0;
+  finished = false;
+  document.querySelectorAll(".stage").forEach(s=>s.classList.remove("active"));
+  document.getElementById("pc").textContent = "100";
+  document.getElementById("ir").textContent = "Empty";
+  document.getElementById("regA").textContent = document.getElementById("a").value || "0";
+  document.getElementById("regB").textContent = document.getElementById("b").value || "0";
+  document.getElementById("result").textContent = "Waiting...";
+  document.getElementById("stageTitle").textContent = "Ready to start";
+  document.getElementById("status").textContent = "Click Next Step to begin.";
+  document.getElementById("details").textContent = "Instruction: " + document.getElementById("operation").value + " A, B";
+  document.getElementById("clock").textContent = "Completed stages: 0 / 3";
+}
+
+function nextStep(){
+  if(finished){
+    document.getElementById("status").textContent = "Cycle complete. Click Start / Reset to try again.";
+    return;
+  }
+
+  const aField = document.getElementById("a");
+  const bField = document.getElementById("b");
+
+  if(aField.value.trim()==="" || bField.value.trim()==="" ||
+     !Number.isFinite(Number(aField.value)) || !Number.isFinite(Number(bField.value))){
+    document.getElementById("status").textContent = "Please enter valid numbers for A and B.";
+    return;
+  }
+
+  const a = Number(aField.value);
+  const b = Number(bField.value);
+  const op = document.getElementById("operation").value;
+  const ids = ["fetch","decode","execute"];
+  const titles = ["FETCH","DECODE","EXECUTE"];
+  const messages = [
+    "CPU fetches the instruction from memory and loads it into IR.",
+    "Control unit decodes the instruction and identifies the operation and operands.",
+    "ALU performs the selected arithmetic operation and stores the result."
+  ];
+
+  if(step===0){
+    document.getElementById("ir").textContent = op + " A, B";
+    document.getElementById("pc").textContent = "101";
+    document.getElementById("details").textContent = "Fetched instruction: " + op + " A, B";
+  }
+
+  if(step===1){
+    document.getElementById("details").textContent = "Decoded operation: " + op + "; operands: " + a + ", " + b;
+  }
+
+  if(step===2){
+    let answer;
+    if(op==="ADD") answer=a+b;
+    else if(op==="SUB") answer=a-b;
+    else answer=a*b;
+    document.getElementById("result").textContent = answer;
+    document.getElementById("details").textContent = op + " operation completed.";
+    finished=true;
+  }
+
+  ids.forEach(id=>document.getElementById(id).classList.remove("active"));
+  document.getElementById(ids[step]).classList.add("active");
+  document.getElementById("stageTitle").textContent = titles[step] + " STAGE";
+  document.getElementById("status").textContent = messages[step];
+  step++;
+  document.getElementById("clock").textContent = "Completed stages: " + step + " / 3";
+}
+
+resetCycle();
+</script>
+</body>
+</html>
